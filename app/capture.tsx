@@ -56,7 +56,10 @@ export default function CaptureScreen() {
     initStorage().catch(console.error);
   }, []);
 
-  const handleLoadUrl = () => {
+  // Auto-create chapter when URL is loaded
+  const [chapterId, setChapterId] = useState<string | null>(null);
+
+  const handleLoadUrl = async () => {
     if (!url.trim()) {
       Alert.alert("Error", "Please enter a chapter URL");
       return;
@@ -69,6 +72,22 @@ export default function CaptureScreen() {
     }
 
     setUrl(finalUrl);
+
+    // Auto-create chapter
+    try {
+      const sourceLanguage = (await SecureStore.getItemAsync("source_language")) || "ja";
+      const targetLanguage = (await SecureStore.getItemAsync("target_language")) || "en";
+      const newChapterId = await createChapter(
+        new URL(finalUrl).hostname + " - " + new Date().toLocaleDateString(),
+        finalUrl,
+        sourceLanguage,
+        targetLanguage
+      );
+      setChapterId(newChapterId);
+    } catch (error) {
+      console.error("Failed to create chapter:", error);
+    }
+
     setShowWebView(true);
     setIsLoading(true);
     setCapturedImages([]);
@@ -93,7 +112,15 @@ export default function CaptureScreen() {
             setCapturedImages((prev) => {
               const exists = prev.some((img) => img.url === data.payload.url);
               if (exists) return prev;
-              return [...prev, data.payload];
+              const newImages = [...prev, data.payload];
+              // Auto-save to chapter
+              if (chapterId) {
+                const pageIndex = newImages.length - 1;
+                savePageImage(chapterId, pageIndex, data.payload.url)
+                  .then(() => saveDetectionResults(chapterId, pageIndex, []))
+                  .catch(console.error);
+              }
+              return newImages;
             });
             break;
 
@@ -101,7 +128,7 @@ export default function CaptureScreen() {
             setCapturedImages((prev) => {
               const exists = prev.some((img) => img.url === data.payload.url);
               if (exists) return prev;
-              return [
+              const newImages = [
                 ...prev,
                 {
                   url: data.payload.url,
@@ -110,6 +137,14 @@ export default function CaptureScreen() {
                   source: "blob",
                 },
               ];
+              // Auto-save to chapter
+              if (chapterId) {
+                const pageIndex = newImages.length - 1;
+                savePageImage(chapterId, pageIndex, data.payload.url)
+                  .then(() => saveDetectionResults(chapterId, pageIndex, []))
+                  .catch(console.error);
+              }
+              return newImages;
             });
             break;
 
@@ -163,31 +198,21 @@ export default function CaptureScreen() {
     setIsTranslating(true);
 
     try {
-      // Step 1: Create chapter
-      setProcessingStep("Creating chapter...");
-      const sourceLanguage =
-        (await SecureStore.getItemAsync("source_language")) || "ja";
-      const targetLanguage =
-        (await SecureStore.getItemAsync("target_language")) || "en";
+      // Use existing chapter (already created during URL load)
+      if (!chapterId) {
+        Alert.alert("Error", "No chapter created. Please load a URL first.");
+        return;
+      }
 
-      const chapterId = await createChapter(
-        `Chapter ${new Date().toLocaleDateString()}`,
-        url,
-        sourceLanguage,
-        targetLanguage
-      );
+      setProcessingStep("Processing images...");
 
-      // Step 2: Save selected images to chapter storage
-      setProcessingStep("Saving images...");
+      // Step 1: Get selected images
       const selectedArray = Array.from(selectedImages);
       const allDetectedBoxes: { imageIndex: number; boxes: DetectedTextBlock[] }[] = [];
 
       for (let i = 0; i < selectedArray.length; i++) {
         const idx = selectedArray[i];
         const image = capturedImages[idx];
-
-        // Save image to chapter storage
-        await savePageImage(chapterId, i, image.url);
 
         // Mock detection - in production, use TFLite
         const mockBoxes: DetectedTextBlock[] = [
@@ -222,7 +247,7 @@ export default function CaptureScreen() {
         });
       }
 
-      // Step 3: Navigate to viewer
+      // Step 2: Navigate to viewer
       setProcessingStep("Opening viewer...");
       router.push({
         pathname: "/viewer",
@@ -391,25 +416,30 @@ const styles = StyleSheet.create({
     padding: 12,
     backgroundColor: "#1a1a2e",
     gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
   },
   urlInput: {
     flex: 1,
     backgroundColor: "#2a2a4a",
-    borderRadius: 8,
-    padding: 12,
+    borderRadius: 12,
+    padding: 14,
     color: "#fff",
     fontSize: 14,
+    borderWidth: 1,
+    borderColor: "#3a3a5a",
   },
   loadButton: {
     backgroundColor: "#576CDB",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderRadius: 12,
     justifyContent: "center",
   },
   loadButtonText: {
     color: "#fff",
     fontWeight: "600",
+    fontSize: 14,
   },
   webviewContainer: {
     flex: 1,
@@ -419,7 +449,7 @@ const styles = StyleSheet.create({
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(11, 17, 32, 0.9)",
+    backgroundColor: "rgba(11, 17, 32, 0.95)",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -427,42 +457,48 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginTop: 12,
     fontSize: 14,
+    fontWeight: "500",
   },
   webviewControls: {
     flexDirection: "row",
     justifyContent: "space-around",
-    padding: 8,
+    padding: 10,
     backgroundColor: "#1a1a2e",
     borderTopWidth: 1,
     borderTopColor: "#333",
   },
   controlButton: {
     backgroundColor: "#2a2a4a",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#3a3a5a",
   },
   controlButtonText: {
     color: "#fff",
     fontSize: 12,
+    fontWeight: "500",
   },
   capturedContainer: {
     flex: 1,
     padding: 12,
+    backgroundColor: "#0b1120",
   },
   capturedTitle: {
     color: "#888",
-    fontSize: 12,
-    marginBottom: 8,
+    fontSize: 13,
+    marginBottom: 10,
+    fontWeight: "500",
   },
   capturedList: {
     paddingBottom: 12,
   },
   capturedItem: {
     width: (SCREEN_WIDTH - 40) / 3,
-    height: 120,
+    height: 130,
     margin: 4,
-    borderRadius: 8,
+    borderRadius: 10,
     overflow: "hidden",
     borderWidth: 2,
     borderColor: "transparent",
@@ -481,14 +517,16 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.7)",
     color: "#fff",
     fontSize: 10,
-    paddingHorizontal: 4,
-    borderRadius: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   translateButton: {
     backgroundColor: "#576CDB",
     padding: 16,
     borderRadius: 12,
     alignItems: "center",
+    marginTop: 8,
   },
   translateButtonText: {
     color: "#fff",
@@ -499,10 +537,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(11, 17, 32, 0.95)",
     padding: 16,
     alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#333",
   },
   processingText: {
     color: "#fff",
     fontSize: 14,
     marginTop: 8,
+    fontWeight: "500",
   },
 });

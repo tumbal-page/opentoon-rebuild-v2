@@ -23,6 +23,7 @@ export default function HomeScreen() {
               Open manga website and capture pages
             </Text>
           </View>
+          <Text style={styles.buttonArrow}>▶</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -36,6 +37,7 @@ export default function HomeScreen() {
               View saved and translated chapters
             </Text>
           </View>
+          <Text style={styles.buttonArrow}>▶</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -49,13 +51,15 @@ export default function HomeScreen() {
               Configure translation server & preferences
             </Text>
           </View>
+          <Text style={styles.buttonArrow}>▶</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>
-          Backend: Configure LibreTranslate in Settings
+          Backend: LibreTranslate (self-hosted)
         </Text>
+        <Text style={styles.footerVersion}>v1.0.0</Text>
       </View>
     </SafeAreaView>
   );
@@ -68,56 +72,66 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: "center",
-    paddingVertical: 40,
+    paddingVertical: 50,
   },
   title: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: "bold",
     color: "#fff",
-    fontFamily: "Figtree",
+    letterSpacing: -1,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 15,
     color: "#888",
-    marginTop: 4,
+    marginTop: 6,
   },
   content: {
     flex: 1,
     paddingHorizontal: 20,
-    gap: 12,
+    gap: 14,
   },
   button: {
     backgroundColor: "#1a1a2e",
-    borderRadius: 14,
-    padding: 20,
+    borderRadius: 16,
+    padding: 18,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(87, 108, 219, 0.2)",
   },
   buttonIcon: {
-    fontSize: 28,
-    marginRight: 12,
+    fontSize: 32,
+    marginRight: 14,
   },
   buttonTextContainer: {
     flex: 1,
   },
   buttonText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "600",
     color: "#fff",
   },
   buttonDesc: {
-    fontSize: 12,
+    fontSize: 13,
     color: "#888",
     marginTop: 4,
+  },
+  buttonArrow: {
+    fontSize: 14,
+    color: "#576CDB",
+    fontWeight: "600",
   },
   footer: {
     padding: 20,
     alignItems: "center",
+    gap: 4,
   },
   footerText: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#666",
+  },
+  footerVersion: {
+    fontSize: 11,
+    color: "#444",
   },
 });

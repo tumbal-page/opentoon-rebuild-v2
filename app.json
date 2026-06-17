@@ -15,7 +15,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.opentoon.app"
+      "bundleIdentifier": "com.opentoon.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "OpenToon needs camera access to scan manga pages",
+        "NSPhotoLibraryUsageDescription": "OpenToon needs photo library access to import manga images",
+        "NSPhotoLibraryAddUsageDescription": "OpenToon needs to save translated images to your library"
+      }
     },
     "android": {
       "package": "com.opentoon.app",
@@ -27,15 +32,53 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.VIBRATE",
+        "android.permission.WAKE_LOCK",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
+      ],
+      "packageExports": [
+        "com.opentoon.app.MainActivity",
+        "com.opentoon.app.MainApplication"
       ]
     },
     "plugins": [
       "expo-router",
-      "expo-camera",
-      "expo-image-picker",
-      "expo-media-library",
-      "expo-secure-store"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "OpenToon needs camera access to scan manga pages",
+          "microphonePermission": "OpenToon needs microphone access for voice features",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "OpenToon needs photo library access to import manga images",
+          "photosAccessDescription": "Allow OpenToon to access your photos to import manga images"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "OpenToon needs photo library access to save translated images",
+          "savePhotosPermission": "Allow OpenToon to save translated images to your library",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-file-system",
+        {
+          "isAccessible": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
