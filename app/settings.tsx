@@ -130,7 +130,7 @@ export default function SettingsScreen() {
         <Text style={styles.label}>Source Language (manga/manhwa original)</Text>
         <View style={styles.languageGrid}>
           {languages
-            .filter((l) => ["ja", "ko", "zh"].includes(l.code))
+            .filter((l) => ["ja", "ko", "zh", "en"].includes(l.code))
             .map((lang) => (
               <TouchableOpacity
                 key={lang.code}
@@ -149,7 +149,7 @@ export default function SettingsScreen() {
         <Text style={styles.label}>Target Language (translation output)</Text>
         <View style={styles.languageGrid}>
           {languages
-            .filter((l) => ["en", "id", "ms"].includes(l.code))
+            .filter((l) => ["en", "id", "ms", "ja", "ko", "zh"].includes(l.code))
             .map((lang) => (
               <TouchableOpacity
                 key={lang.code}
