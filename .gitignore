@@ -1,0 +1,11 @@
+node_modules/
+.expo/
+dist/
+*.apk
+*.aab
+*.jks
+*.keystore
+*.pem
+.env
+.env.local
+google-service-account.json
