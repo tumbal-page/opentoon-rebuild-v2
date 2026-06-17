@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,13 @@ import {
   ActivityIndicator,
   ScrollView,
 } from "react-native";
+import { GestureDetector, Gesture } from "react-native-gesture-handler";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { useLocalSearchParams } from "expo-router";
 import { translateDetectedBlocks, TranslatedBlock } from "../src/services/translationService";
 
@@ -32,8 +39,68 @@ export default function ViewerScreen() {
   const [sourceLanguage, setSourceLanguage] = useState("ja");
   const [targetLanguage, setTargetLanguage] = useState("en");
 
+  // Gesture state
+  const scale = useSharedValue(1);
+  const savedScale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const savedTranslateX = useSharedValue(0);
+  const savedTranslateY = useSharedValue(0);
+
   const currentImage = images[currentIndex];
   const currentBoxes = detectedBoxes.find((d) => d.imageIndex === currentIndex)?.boxes || [];
+
+  // Pinch gesture
+  const pinchGesture = Gesture.Pinch()
+    .onUpdate((e) => {
+      scale.value = savedScale.value * e.scale;
+    })
+    .onEnd(() => {
+      if (scale.value < 1) {
+        scale.value = withSpring(1);
+      } else if (scale.value > 3) {
+        scale.value = withSpring(3);
+      }
+      savedScale.value = scale.value;
+    });
+
+  // Pan gesture
+  const panGesture = Gesture.Pan()
+    .onUpdate((e) => {
+      translateX.value = savedTranslateX.value + e.translationX;
+      translateY.value = savedTranslateY.value + e.translationY;
+    })
+    .onEnd(() => {
+      savedTranslateX.value = translateX.value;
+      savedTranslateY.value = translateY.value;
+    });
+
+  // Double tap to zoom
+  const doubleTapGesture = Gesture.Tap()
+    .numberOfTaps(2)
+    .onEnd(() => {
+      if (scale.value > 1) {
+        scale.value = withSpring(1);
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
+        savedScale.value = 1;
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      } else {
+        scale.value = withSpring(2);
+        savedScale.value = 2;
+      }
+    });
+
+  const composed = Gesture.Simultaneous(pinchGesture, panGesture, doubleTapGesture);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: scale.value },
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
 
   const startTranslation = async () => {
     setIsTranslating(true);
@@ -55,6 +122,13 @@ export default function ViewerScreen() {
     if (currentIndex < images.length - 1) {
       setCurrentIndex((prev) => prev + 1);
       setTranslatedBlocks([]);
+      // Reset zoom
+      scale.value = withSpring(1);
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+      savedScale.value = 1;
+      savedTranslateX.value = 0;
+      savedTranslateY.value = 0;
     }
   };
 
@@ -62,6 +136,13 @@ export default function ViewerScreen() {
     if (currentIndex > 0) {
       setCurrentIndex((prev) => prev - 1);
       setTranslatedBlocks([]);
+      // Reset zoom
+      scale.value = withSpring(1);
+      translateX.value = withSpring(0);
+      translateY.value = withSpring(0);
+      savedScale.value = 1;
+      savedTranslateX.value = 0;
+      savedTranslateY.value = 0;
     }
   };
 
@@ -81,86 +162,88 @@ export default function ViewerScreen() {
           Page {currentIndex + 1} / {images.length}
         </Text>
         <Text style={styles.boxInfo}>
-          {currentBoxes.length} text blocks
+          {currentBoxes.length} text blocks | Zoom: {Math.round(scale.value * 100)}%
         </Text>
       </View>
 
-      {/* Image Viewer */}
+      {/* Image Viewer with Gestures */}
       <View style={styles.viewerContainer}>
-        <ScrollView contentContainerStyle={styles.imageScroll}>
-          <Image
-            source={{ uri: currentImage }}
-            style={[styles.image, { height: imageHeight }]}
-            resizeMode="contain"
-          />
+        <GestureDetector gesture={composed}>
+          <Animated.View style={[styles.imageContainer, animatedStyle]}>
+            <Image
+              source={{ uri: currentImage }}
+              style={[styles.image, { height: imageHeight }]}
+              resizeMode="contain"
+            />
 
-          {/* Text Blocks Overlay */}
-          {displayMode !== "hidden" && translatedBlocks.map((block, index) => {
-            const scaleX = SCREEN_WIDTH / 1200;
-            const scaleY = imageHeight / 1800;
+            {/* Text Blocks Overlay */}
+            {displayMode !== "hidden" && translatedBlocks.map((block, index) => {
+              const scaleX = SCREEN_WIDTH / 1200;
+              const scaleY = imageHeight / 1800;
 
-            return (
-              <View
-                key={index}
-                style={[
-                  styles.textBlock,
-                  {
-                    left: block.x * scaleX,
-                    top: block.y * scaleY,
-                    width: block.width * scaleX,
-                    height: block.height * scaleY,
-                    backgroundColor:
-                      displayMode === "bubble"
-                        ? "rgba(255,255,255,0.95)"
-                        : "rgba(0,0,0,0.6)",
-                    borderRadius:
-                      displayMode === "bubble" ? block.height * scaleY * 0.3 : 4,
-                    borderWidth: displayMode === "bubble" ? 1 : 0,
-                    borderColor: displayMode === "bubble" ? "#333" : "transparent",
-                    justifyContent: "center",
-                    alignItems: "center",
-                  },
-                ]}
-              >
-                <Text
+              return (
+                <View
+                  key={index}
                   style={[
-                    styles.textBlockText,
+                    styles.textBlock,
                     {
-                      fontSize: block.fontSize || 12,
-                      color: displayMode === "bubble" ? "#000" : "#fff",
+                      left: block.x * scaleX,
+                      top: block.y * scaleY,
+                      width: block.width * scaleX,
+                      height: block.height * scaleY,
+                      backgroundColor:
+                        displayMode === "bubble"
+                          ? "rgba(255,255,255,0.95)"
+                          : "rgba(0,0,0,0.6)",
+                      borderRadius:
+                        displayMode === "bubble" ? block.height * scaleY * 0.3 : 4,
+                      borderWidth: displayMode === "bubble" ? 1 : 0,
+                      borderColor: displayMode === "bubble" ? "#333" : "transparent",
+                      justifyContent: "center",
+                      alignItems: "center",
                     },
                   ]}
-                  numberOfLines={3}
                 >
-                  {block.translatedText}
-                </Text>
-              </View>
-            );
-          })}
+                  <Text
+                    style={[
+                      styles.textBlockText,
+                      {
+                        fontSize: block.fontSize || 12,
+                        color: displayMode === "bubble" ? "#000" : "#fff",
+                      },
+                    ]}
+                    numberOfLines={3}
+                  >
+                    {block.translatedText}
+                  </Text>
+                </View>
+              );
+            })}
 
-          {/* Debug: Show bounding boxes when no translation */}
-          {translatedBlocks.length === 0 &&
-            currentBoxes.map((box: any, index: number) => (
-              <View
-                key={`debug-${index}`}
-                style={[
-                  styles.debugBox,
-                  {
-                    left: (box.x / 1200) * SCREEN_WIDTH,
-                    top: (box.y / 1800) * imageHeight,
-                    width: ((box.width || 100) / 1200) * SCREEN_WIDTH,
-                    height: ((box.height || 40) / 1800) * imageHeight,
-                    borderColor: box.classId === 1 ? "#576CDB" : "#1f9d55",
-                  },
-                ]}
-              >
-                <Text style={styles.debugText}>
-                  {box.classId === 1 ? "Bubble" : "Text"}{" "}
-                  {Math.round((box.confidence || 0) * 100)}%
-                </Text>
-              </View>
-            ))}
-        </ScrollView>
+            {/* Debug: Show bounding boxes when no translation */}
+            {translatedBlocks.length === 0 &&
+              currentBoxes.map((box: any, index: number) => (
+                <View
+                  key={`debug-${index}`}
+                  style={[
+                    styles.debugBox,
+                    {
+                      left: (box.x / 1200) * SCREEN_WIDTH,
+                      top: (box.y / 1800) * imageHeight,
+                      width: ((box.width || 100) / 1200) * SCREEN_WIDTH,
+                      height: ((box.height || 40) / 1800) * imageHeight,
+                      borderColor: box.classId === 1 ? "#576CDB" : "#1f9d55",
+                    },
+                  ]}
+                >
+                  <Text style={styles.debugText}>
+                    {box.classId === 1 ? "Bubble" : "Text"}{" "}
+                    {Math.round((box.confidence || 0) * 100)}%
+                  </Text>
+                </View>
+              ))}
+          </Animated.View>
+        </GestureDetector>
       </View>
 
       {/* Controls */}
@@ -269,8 +352,11 @@ const styles = StyleSheet.create({
   viewerContainer: {
     flex: 1,
     backgroundColor: "#000",
+    overflow: "hidden",
   },
-  imageScroll: {
+  imageContainer: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
   },
   image: {

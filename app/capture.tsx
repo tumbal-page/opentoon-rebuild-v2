@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -23,6 +23,12 @@ import {
   DetectedTextBlock,
   TranslatedBlock,
 } from "../src/services/translationService";
+import {
+  initStorage,
+  createChapter,
+  savePageImage,
+  saveDetectionResults,
+} from "../src/utils/chapterStorage";
 import * as SecureStore from "expo-secure-store";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -42,7 +48,13 @@ export default function CaptureScreen() {
   const [selectedImages, setSelectedImages] = useState<Set<number>>(new Set());
   const [showWebView, setShowWebView] = useState(false);
   const [currentPreview, setCurrentPreview] = useState<string | null>(null);
+  const [processingStep, setProcessingStep] = useState("");
   const webViewRef = useRef<WebView>(null);
+
+  // Initialize storage on mount
+  useEffect(() => {
+    initStorage().catch(console.error);
+  }, []);
 
   const handleLoadUrl = () => {
     if (!url.trim()) {
@@ -151,18 +163,32 @@ export default function CaptureScreen() {
     setIsTranslating(true);
 
     try {
+      // Step 1: Create chapter
+      setProcessingStep("Creating chapter...");
       const sourceLanguage =
         (await SecureStore.getItemAsync("source_language")) || "ja";
       const targetLanguage =
         (await SecureStore.getItemAsync("target_language")) || "en";
 
-      // For now, create mock detected blocks
-      // In production, these come from TFLite detection
+      const chapterId = await createChapter(
+        `Chapter ${new Date().toLocaleDateString()}`,
+        url,
+        sourceLanguage,
+        targetLanguage
+      );
+
+      // Step 2: Save selected images to chapter storage
+      setProcessingStep("Saving images...");
       const selectedArray = Array.from(selectedImages);
       const allDetectedBoxes: { imageIndex: number; boxes: DetectedTextBlock[] }[] = [];
 
-      for (const idx of selectedArray) {
+      for (let i = 0; i < selectedArray.length; i++) {
+        const idx = selectedArray[i];
         const image = capturedImages[idx];
+
+        // Save image to chapter storage
+        await savePageImage(chapterId, i, image.url);
+
         // Mock detection - in production, use TFLite
         const mockBoxes: DetectedTextBlock[] = [
           {
@@ -187,16 +213,21 @@ export default function CaptureScreen() {
           },
         ];
 
+        // Save detection results
+        await saveDetectionResults(chapterId, i, mockBoxes);
+
         allDetectedBoxes.push({
-          imageIndex: idx,
+          imageIndex: i,
           boxes: mockBoxes,
         });
       }
 
-      // Navigate to viewer with data
+      // Step 3: Navigate to viewer
+      setProcessingStep("Opening viewer...");
       router.push({
         pathname: "/viewer",
         params: {
+          chapterId,
           images: JSON.stringify(
             selectedArray.map((idx) => capturedImages[idx].url)
           ),
@@ -204,9 +235,10 @@ export default function CaptureScreen() {
         },
       });
     } catch (error) {
-      Alert.alert("Error", `Translation failed: ${error}`);
+      Alert.alert("Error", `Processing failed: ${error}`);
     } finally {
       setIsTranslating(false);
+      setProcessingStep("");
     }
   };
 
@@ -288,6 +320,14 @@ export default function CaptureScreen() {
               <Text style={styles.controlButtonText}>✕ Close</Text>
             </TouchableOpacity>
           </View>
+        </View>
+      )}
+
+      {/* Processing Status */}
+      {isTranslating && (
+        <View style={styles.processingContainer}>
+          <ActivityIndicator size="large" color="#576CDB" />
+          <Text style={styles.processingText}>{processingStep}</Text>
         </View>
       )}
 
@@ -454,5 +494,15 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  processingContainer: {
+    backgroundColor: "rgba(11, 17, 32, 0.95)",
+    padding: 16,
+    alignItems: "center",
+  },
+  processingText: {
+    color: "#fff",
+    fontSize: 14,
+    marginTop: 8,
   },
 });
